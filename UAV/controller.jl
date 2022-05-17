@@ -16,16 +16,12 @@ rosloops = 0
 
 
 function pos_callback(pose::Pose) 
-    
     global pos =[pose.position.x, pose.position.y, pose.position.z, pose.orientation.z]
-    #println(hpd)
 end
 
 function sensor1_callback(msg::Point) 
     sensor1 =[msg.x, msg.y, msg.z]
-    #println(sensor1)
 end
-
 
 function sendvalues(pub_obj,vc)  
     msg = Twist()
@@ -43,10 +39,13 @@ function runcontroller(pub_obj,runvar)
 end
 
 function main()
+    # Espera 1 seg para comenzar la fiesta!!
     rossleep(1)
-    #xd = 5 * sin(mul*0.04*t)+0.1;         xd_p = 5*mul*0.04*cos(mul*0.04*t);     xd_pp = -5*mul*mul*0.04*0.04*sin(mul*0.04*t);
-    #yd = 5 * sin(mul*0.08*t)+0.1;         yd_p = 5*mul*0.08*cos(mul*0.08*t);     yd_pp = -5*mul*mul*0.08*0.08*sin(mul*0.08*t);               
-    #zd = 1 * sin (0.08 * t) +2 ;          zd_p = 0.08*cos(0.08*t);
+
+    # Trayectoria deseada
+    #hxd = 5 * sin(mul*0.04*t)+0.1;         hxdp = 5*mul*0.04*cos(mul*0.04*t);     hxdpp = -5*mul*mul*0.04*0.04*sin(mul*0.04*t);
+    #hyd = 5 * sin(mul*0.08*t)+0.1;         hydp = 5*mul*0.08*cos(mul*0.08*t);     hydpp = -5*mul*mul*0.08*0.08*sin(mul*0.08*t);               
+    #hzd = 1 * sin (0.08 * t) +2 ;          hzdp = 0.08*cos(0.08*t);
 
     # Posicion deseada
     global hxd = 12.3456789
@@ -54,34 +53,28 @@ function main()
     global hzd = 16.3654
     global psid = 0.123456
 
-    t=40 #Segundos 
+    t=30 #Segundos 
     hz = 30 # Frecuencia de actualizacion
     samples = t*hz # datos de muestreo totales
     loop_rate = Rate(hz) # Tiempo de muestre espera
-
-    psi = Array{Float64}(undef, samples)
-    vector = []
+    
+    # Inicializacion de matrices
     h = zeros(4, samples)
     hd = zeros(4, samples)
     he = zeros(4, samples)
     J = zeros(4,4)
-
     global K1 = Matrix{Float64}(I, 4, 4)
     global K2 = Matrix{Float64}(I, 4, 4)
 
-    #values = var
-    
-    #am = var
-    
+    # Activa controlador para el robot
     runcontroller(pub_run,1)
     
-    
+    println("OK, controller is runnig!!!")
     for k in 1:(t*hz) 
         
         tic = time()
 
         hd[:,k] = [hxd,hyd,hzd,psid]
-        #h[:,k] = [pos[1],pos[2],pos[3],pos[4]]
         h[:,k] = pos
         he[:,k] = hd[:,k]-h[:,k]
 
@@ -112,20 +105,31 @@ function main()
 
         #VMref = pinv(J)*(hdp+K1*tanh(K2*he'));
         vc = pinv(J) *(K1*tanh.(K2*he[:,k]))
-        #VMref = pinv(J)*(K1*tanh(K2*he'));
-        
+
+        # Envia velocidad de manipulavilidad al robot
         sendvalues(pub,vc)
-        
         
         toc = time()
         dt = toc-tic
         rossleep(loop_rate) 
      
-        println(he[:,k])
+        #println(k)
     end
-    runcontroller(pub_run,0)
-    #am = var
     
+    runcontroller(pub_run,0)
+    
+    x = 1:1:samples
+    hxe= he[1,1:samples]
+    hye= he[2,1:samples]
+    hze= he[3,1:samples]
+    hpsie= he[4,1:samples]
+
+    plot!(x,hxe, title = "Erro de control", label = ["hxe"], lw = 1)
+    plot!(x,hye,label = ["hye"], lw = 1)
+    plot!(x,hze,label = ["hze"], lw = 1)
+    plot!(x,hpsie,label = ["hpsie"], lw = 1)
+    savefig("error.pdf")
+
 end
 
 if ! isinteractive()

@@ -6,17 +6,19 @@ using LinearAlgebra
 using Plots
 
 @rosimport geometry_msgs.msg: Point, Pose2D, Twist, Pose
-#@rosimport std_msgs.msg: Int32
+@rosimport nav_msgs.msg: Odometry
+@rosimport std_msgs.msg: Int32MultiArray
 rostypegen()
 using .geometry_msgs.msg
-#using .std_msgs.msg
+using .nav_msgs.msg
+using .std_msgs.msg
 
 maxloops = 1000
 rosloops = 0
 
 
-function pos_callback(pose::Pose) 
-    global pos =[pose.position.x, pose.position.y, pose.position.z, pose.orientation.z]
+function odo_callback(msg::Odometry) 
+    global pos =[msg.pose.pose.position.x, msg.pose.pose.position.y, msg.pose.pose.position.z, msg.pose.pose.orientation.z]
 end
 
 function sensor1_callback(msg::Point) 
@@ -38,6 +40,14 @@ function runcontroller(pub_obj,runvar)
     publish(pub_obj, msg) 
 end
 
+function set_config(pub_config,run,time,hz)  
+    msg = Int32MultiArray()
+    
+    msg.data = [run, time , hz ]
+
+    publish(pub_config, msg) 
+end
+
 function main()
     # Espera 1 seg para comenzar la fiesta!!
     rossleep(1)
@@ -48,12 +58,12 @@ function main()
     #hzd = 1 * sin (0.08 * t) +2 ;          hzdp = 0.08*cos(0.08*t);
 
     # Posicion deseada
-    global hxd = 12.3456789
-    global hyd = 21.2112
-    global hzd = 16.3654
+    global hxd = 25
+    global hyd = 30
+    global hzd = 40
     global psid = 0.123456
 
-    t=30 #Segundos 
+    t=65 #Segundos 
     hz = 30 # Frecuencia de actualizacion
     samples = t*hz # datos de muestreo totales
     loop_rate = Rate(hz) # Tiempo de muestre espera
@@ -67,7 +77,9 @@ function main()
     global K2 = Matrix{Float64}(I, 4, 4)
 
     # Activa controlador para el robot
+    set_config(pub_config,1,t,hz)
     runcontroller(pub_run,1)
+    
     
     println("OK, controller is runnig!!!")
     for k in 1:(t*hz) 
@@ -115,7 +127,8 @@ function main()
      
         #println(k)
     end
-    
+
+    set_config(pub_config,0,t,hz)
     runcontroller(pub_run,0)
     
     x = 1:1:samples
@@ -124,7 +137,7 @@ function main()
     hze= he[3,1:samples]
     hpsie= he[4,1:samples]
 
-    plot!(x,hxe, title = "Erro de control", label = ["hxe"], lw = 1)
+    plot!(x,hxe, title = "Error de control", label = ["hxe"], lw = 1)
     plot!(x,hye,label = ["hye"], lw = 1)
     plot!(x,hze,label = ["hze"], lw = 1)
     plot!(x,hpsie,label = ["hpsie"], lw = 1)
@@ -134,10 +147,12 @@ end
 
 if ! isinteractive()
     init_node("Controller")  
-    pub = Publisher{Twist}("control", queue_size=10)
+    pub = Publisher{Twist}("/UAV/Controller", queue_size=10)
     pub_run = Publisher{Point}("Run", queue_size=10)
-    sub = Subscriber{Pose}("Position", pos_callback,  queue_size=10)
-    sub2 = Subscriber{Point}("sensor1", sensor1_callback,  queue_size=10)
+    pub_config = Publisher{Int32MultiArray}("/UAV/Config", queue_size=10)
+    sub = Subscriber{Odometry}("/UAV/Odometry", odo_callback,  queue_size=10)
+    #sub2 = Subscriber{Point}("sensor1", sensor1_callback,  queue_size=10)
+    
     main()
 end
 

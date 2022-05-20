@@ -34,12 +34,6 @@ function sendvalues(pub_obj,vc)
     publish(pub_obj, msg) 
 end
 
-function runcontroller(pub_obj,runvar)  
-    msg = Point()
-    msg.x = runvar
-    publish(pub_obj, msg) 
-end
-
 function set_config(pub_config,run,time,hz)  
     msg = Int32MultiArray()
     
@@ -60,10 +54,10 @@ function main()
     # Posicion deseada
     global hxd = 25
     global hyd = 30
-    global hzd = 40
+    global hzd = 25
     global psid = 0.123456
 
-    t=65 #Segundos 
+    t=60 #Segundos 
     hz = 30 # Frecuencia de actualizacion
     samples = t*hz # datos de muestreo totales
     loop_rate = Rate(hz) # Tiempo de muestre espera
@@ -77,9 +71,7 @@ function main()
     global K2 = Matrix{Float64}(I, 4, 4)
 
     # Activa controlador para el robot
-    set_config(pub_config,1,t,hz)
-    runcontroller(pub_run,1)
-    
+    set_config(pub_config,1,t,hz)  
     
     println("OK, controller is runnig!!!")
     for k in 1:(t*hz) 
@@ -129,7 +121,6 @@ function main()
     end
 
     set_config(pub_config,0,t,hz)
-    runcontroller(pub_run,0)
     
     x = 1:1:samples
     hxe= he[1,1:samples]
@@ -148,8 +139,8 @@ end
 if ! isinteractive()
     init_node("Controller")  
     pub = Publisher{Twist}("/UAV/Controller", queue_size=10)
-    pub_run = Publisher{Point}("Run", queue_size=10)
     pub_config = Publisher{Int32MultiArray}("/UAV/Config", queue_size=10)
+    
     sub = Subscriber{Odometry}("/UAV/Odometry", odo_callback,  queue_size=10)
     #sub2 = Subscriber{Point}("sensor1", sensor1_callback,  queue_size=10)
     

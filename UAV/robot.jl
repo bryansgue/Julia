@@ -15,7 +15,7 @@ using .nav_msgs.msg
 using .std_msgs.msg
 
 function vc_callback(pose::Twist) 
-    global vref =[pose.linear.x, pose.linear.y, pose.linear.z, pose.angular.z]
+    global v_ref =[pose.linear.x, pose.linear.y, pose.linear.z, pose.angular.z]
 end
 
 function config_callback(msg::Int32MultiArray) 
@@ -46,13 +46,16 @@ function main()
         try
             runnow = config[1]
             global t = config[2] #Segundos de controlador            
+            #rossleep(0.2)
         catch
-            runnow = 0
-            rossleep(Rate(10))
+            runnow = 0    
+            rossleep(Rate(10))   
         end 
+        
     end
+    
 
-    hz = 25 # Frecuencia de actualizacion
+    hz = 10 # Frecuencia de actualizacion
     samples = t*hz # datos de muestreo totales
     loop_rate = Rate(hz) # Tiempo de muestre espera
 
@@ -60,7 +63,8 @@ function main()
     h = zeros(4, samples+1)
     hp = zeros(4, samples)
     v = zeros(4, samples+1)
-    
+    vref = zeros(4, samples+1)
+        
     # Estados iniciales del robot
     h[:,1] = [0 0 1 0]
     hp[:,1] = [0 0 0 0]
@@ -125,19 +129,21 @@ function main()
 
         G=[G11;G21;G31;G41];
 
-        vp = inv(M)*(vref-C*v[:,k]-G);
+        vref[:,k] = v_ref
+
+        vp = inv(M)*(vref[:,k]-C*v[:,k]-G);
         v[:,k+1] = v[:,k] +vp*ts;
 
         # Cinematica del robot
         psi = h[4,k]
         rot = [cos(psi) -sin(psi) 0 0; sin(psi) cos(psi) 0 0; 0 0 1 0; 0 0 0 1]
-        hp[:,k] = rot*v[:,k+1]      
+        hp[:,k] = rot*v[:,k] # CAmbio aqui      
 
         # Integracion numerica
         h[:,k+1] = hp[:,k]*(1/hz) + h[:,k] 
         
         # Enviar valores de posicion y velocidad (Odometria)
-        set_odo(pub_pos, h[:,k+1],hp[:,k])
+        set_odo(pub_pos, h[:,k+1], v[:,k+1])
         
         rossleep(loop_rate) 
         toc = time()
@@ -149,6 +155,10 @@ if ! isinteractive()
     init_node("Robot")  
     sub_vc = Subscriber{Twist}("/UAV/Controller", vc_callback,  queue_size=10)
     sub_run = Subscriber{Int32MultiArray}("/UAV/Config", config_callback,  queue_size=10)
+    
+    # Lanza los publisher del sistema
+    pub_config = Publisher{Int32MultiArray}("/UAV/Config", queue_size=10)
     pub_pos = Publisher{Odometry}("/UAV/Odometry", queue_size=10)
+    pub = Publisher{Twist}("/UAV/Controller", queue_size=10)
     main()
 end
